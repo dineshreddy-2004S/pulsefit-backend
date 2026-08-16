@@ -1,26 +1,35 @@
 const nodemailer = require('nodemailer');
+const dns = require('dns');
 require('dotenv').config();
 
-// Auto-clean password: strip whitespace if copied with spaces
+// 1. Force Node.js DNS resolver to prioritize IPv4 at process level
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder('ipv4first');
+}
+
+// 2. Auto-clean password: strip whitespace if copied with spaces
 const cleanPassword = (process.env.SMTP_PASS || '').replace(/\s+/g, '');
 
-// Cloud-Optimized SMTP Transporter with Forced IPv4 (Fixes Render ENETUNREACH)
+// 3. Cloud-Optimized SMTP Transporter with hard IPv4 socket override
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
   port: 465,
   secure: true, // Enforces SSL on Port 465
-  family: 4, // 👈 FORCES IPv4 ONLY (Bypasses Render IPv6 ENETUNREACH bug)
+  // Hard-locks DNS lookup to IPv4 (bypasses Render IPv6 ENETUNREACH bug)
+  lookup: (hostname, options, callback) => {
+    return dns.lookup(hostname, { family: 4 }, callback);
+  },
   auth: {
     user: process.env.SMTP_USER,
     pass: cleanPassword
   },
   tls: {
-    rejectUnauthorized: false // Bypasses cloud container outbound network blocks
+    rejectUnauthorized: false
   },
-  pool: true, // Keeps connection open for instant email delivery
-  connectionTimeout: 10000, // 10s connection timeout prevents server hanging
-  greetingTimeout: 10000,
-  socketTimeout: 15000
+  pool: true,
+  connectionTimeout: 15000,
+  greetingTimeout: 15000,
+  socketTimeout: 20000
 });
 
 // Verify SMTP connection on startup
