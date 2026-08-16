@@ -4,11 +4,12 @@ require('dotenv').config();
 // Auto-clean password: strip whitespace if copied with spaces
 const cleanPassword = (process.env.SMTP_PASS || '').replace(/\s+/g, '');
 
-// Cloud-Optimized SMTP Transporter (Port 465 SSL for Render/Vercel compatibility)
+// Cloud-Optimized SMTP Transporter with Forced IPv4 (Fixes Render ENETUNREACH)
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
   port: 465,
   secure: true, // Enforces SSL on Port 465
+  family: 4, // 👈 FORCES IPv4 ONLY (Bypasses Render IPv6 ENETUNREACH bug)
   auth: {
     user: process.env.SMTP_USER,
     pass: cleanPassword
@@ -17,7 +18,7 @@ const transporter = nodemailer.createTransport({
     rejectUnauthorized: false // Bypasses cloud container outbound network blocks
   },
   pool: true, // Keeps connection open for instant email delivery
-  connectionTimeout: 10000, // 10s connection timeout prevents hanging
+  connectionTimeout: 10000, // 10s connection timeout prevents server hanging
   greetingTimeout: 10000,
   socketTimeout: 15000
 });
@@ -27,7 +28,7 @@ transporter.verify((error) => {
   if (error) {
     console.error('❌ Nodemailer SMTP Connection Error:', error.message);
   } else {
-    console.log('✅ Nodemailer is securely connected to Gmail via SSL (Port 465)');
+    console.log('✅ Nodemailer is securely connected to Gmail via IPv4 (Port 465)');
   }
 });
 
