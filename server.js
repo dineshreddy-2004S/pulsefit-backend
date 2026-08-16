@@ -1,52 +1,58 @@
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 require('dotenv').config();
-
-const authRoutes = require('./routes/authRoutes');
-const adminRoutes = require('./routes/adminRoutes');
-const memberRoutes = require('./routes/memberRoutes');
-const analyticsRoutes = require('./routes/analyticsRoutes');
-const planRoutes = require('./routes/planRoutes');
-const reminderRoutes = require('./routes/reminderRoutes');
 
 const app = express();
 
-// Universal CORS headers
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-  next();
-});
+// 1. Enforce JWT Secret existence
+if (!process.env.JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET environment variable is not defined.');
+  process.exit(1);
+}
 
-app.use(cors());
+// 2. HTTP Security Headers
+app.use(helmet());
 
-// 50MB payload parser for Base64 image strings
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// 3. Strict CORS Configuration
+const allowedOrigins = [
+  'http://localhost:5173',
+  process.env.FRONTEND_URL
+].filter(Boolean);
 
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', message: 'Backend is active and running!' });
-});
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl) or if in allowed list
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('Blocked by CORS policy'));
+  },
+  credentials: true
+}));
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// 4. Import & Mount Routes
+const authRoutes = require('./routes/authRoutes');
+const memberRoutes = require('./routes/memberRoutes');
+const planRoutes = require('./routes/planRoutes');
+const analyticsRoutes = require('./routes/analyticsRoutes');
+const reminderRoutes = require('./routes/reminderRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 
 app.use('/api/auth', authRoutes);
-app.use('/api/admin', adminRoutes);
 app.use('/api/members', memberRoutes);
-app.use('/api/analytics', analyticsRoutes);
 app.use('/api/plans', planRoutes);
+app.use('/api/analytics', analyticsRoutes);
 app.use('/api/reminders', reminderRoutes);
+app.use('/api/admin', adminRoutes);
 
-app.use((err, req, res, next) => {
-  console.error('Unhandled Server Error:', err);
-  res.status(err.status || 500).json({
-    message: err.message || 'Internal Server Error'
-  });
-});
+// Health Check
+app.get('/health', (req, res) => res.status(200).send('OK'));
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
-  console.log(`🚀 Server running smoothly on http://localhost:${PORT}`);
+  console.log(`🚀 Secure Server running on port ${PORT}`);
 });
