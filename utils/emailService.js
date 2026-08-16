@@ -1,4 +1,3 @@
-const axios = require('axios');
 require('dotenv').config();
 
 // Helper for strict dd/mm/yyyy date formatting
@@ -12,10 +11,10 @@ const formatEmailDate = (dateVal) => {
   return `${day}/${month}/${year}`;
 };
 
-// Core HTTP Email Dispatcher via Brevo REST API (Bypasses Render SMTP Port Blocks)
+// Core HTTP Email Dispatcher using Node.js Native fetch
 const sendViaHttpApi = async ({ toEmail, toName, subject, htmlContent, senderName }) => {
   const apiKey = process.env.BREVO_API_KEY;
-  const senderEmail = process.env.SMTP_USER; // Your Gmail used during Brevo signup
+  const senderEmail = process.env.SMTP_USER;
 
   if (!apiKey) {
     throw new Error('BREVO_API_KEY is not configured in environment variables.');
@@ -36,16 +35,22 @@ const sendViaHttpApi = async ({ toEmail, toName, subject, htmlContent, senderNam
     htmlContent: htmlContent
   };
 
-  const response = await axios.post('https://api.brevo.com/v3/smtp/email', payload, {
+  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
     headers: {
       'api-key': apiKey,
       'Content-Type': 'application/json',
       'Accept': 'application/json'
     },
-    timeout: 10000
+    body: JSON.stringify(payload)
   });
 
-  return response.data;
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || `Email delivery failed with status ${response.status}`);
+  }
+
+  return await response.json();
 };
 
 // 1. Send Due Payment Reminder Email
